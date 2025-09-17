@@ -1,0 +1,45 @@
+﻿<!-- Views/WebGL/BasicCube.cshtml -->
+@{
+    ViewData["Title"] = "WebGL Cube Demo";
+    
+}
+
+<div class="webgl-container">
+    <div id="webgl-canvas-container">
+        <canvas id="webgl-canvas"></canvas>
+        <div id="loading" class="loading-overlay">
+            <div class="spinner"></div>
+            <p>Loading WebGL scene...</p>
+        </div>
+    </div>
+
+    <div class="controls-panel">
+        <div class="control-group">
+            <label>Rotation Speed:</label>
+            <input type="range" id="rotation-speed" min="0" max="2" step="0.1" value="1">
+        </div>
+
+        <div class="control-group">
+            <button id="toggle-rotation" class="btn btn-primary">Toggle Rotation</button>
+            <button id="reset-camera" class="btn btn-secondary">Reset Camera</button>
+            <button id="load-model">Load 3D Model</button>
+        </div>
+
+        <div class="stats">
+            <div id="fps-counter">FPS: 200</div>
+            <div id="memory-usage">Memory: 0 MB</div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/three.js"></script>
+    <script src="~/lib/stats.js"></script>
+    <script src="~/js/app.js"></script>
+    <script>
+        // Инициализация сцены после загрузки страницы
+        document.addEventListener('DOMContentLoaded', function () {
+            initWebGLScene('webgl-canvas');
+        });
+    </script>
+}
