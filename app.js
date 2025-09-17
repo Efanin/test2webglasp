@@ -44,7 +44,7 @@ class WebGLScene {
             0.1,
             1000
         );
-        this.camera.position.set(0, 2, 5);
+        this.camera.position.set(0, 1.5, 5);
 
         // Создаем рендерер
         this.renderer = new THREE.WebGLRenderer({
@@ -61,140 +61,62 @@ class WebGLScene {
     }
 
     async createEnvironment() {
-        // Загружаем HDR cubemap для окружения
+        // Используем рабочий cubemap из three.js examples
         try {
-            // Используем красивый HDR cubemap
-            const hdrEquirect = new THREE.RGBELoader()
-                .setDataType(THREE.UnsignedByteType)
-                .load('https://threejs.org/examples/textures/equirectangular/venice_sunset_1k.hdr', () => {
-                    hdrEquirect.mapping = THREE.EquirectangularReflectionMapping;
+            const cubeTextureLoader = new THREE.CubeTextureLoader();
 
-                    // Конвертируем HDR в cubemap
-                    const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
-                    pmremGenerator.compileEquirectangularShader();
+            // Используем проверенный cubemap (Pisa)
+            const urls = [
+                'https://threejs.org/examples/textures/cube/pisa/px.png',
+                'https://threejs.org/examples/textures/cube/pisa/nx.png',
+                'https://threejs.org/examples/textures/cube/pisa/py.png',
+                'https://threejs.org/examples/textures/cube/pisa/ny.png',
+                'https://threejs.org/examples/textures/cube/pisa/pz.png',
+                'https://threejs.org/examples/textures/cube/pisa/nz.png'
+            ];
 
-                    const hdrCubeRenderTarget = pmremGenerator.fromEquirectangular(hdrEquirect);
-                    this.envMap = hdrCubeRenderTarget.texture;
+            this.envMap = await new Promise((resolve, reject) => {
+                cubeTextureLoader.load(urls, (texture) => {
+                    texture.encoding = THREE.sRGBEncoding;
+                    resolve(texture);
+                }, undefined, reject);
+            });
 
-                    // Устанавливаем окружение
-                    this.scene.background = this.envMap;
-                    this.scene.environment = this.envMap;
+            this.scene.background = this.envMap;
+            this.scene.environment = this.envMap;
 
-                    // Очищаем память
-                    hdrEquirect.dispose();
-                    pmremGenerator.dispose();
-                });
         } catch (error) {
-            console.warn('HDR loading failed, using fallback cubemap:', error);
-            await this.loadFallbackCubemap();
+            console.warn('Cubemap loading failed, using fallback:', error);
+            // Fallback к простому цвету
+            this.scene.background = new THREE.Color(0x222222);
+            this.scene.environment = null;
         }
 
-        // Создаем отражающий пол
+        // Создаем минималистичный пол
         this.createFloor();
-
-        // Добавляем декоративные элементы
-        this.createDecorativeElements();
-    }
-
-    async loadFallbackCubemap() {
-        // Резервный cubemap если HDR не загрузится
-        const cubeTextureLoader = new THREE.CubeTextureLoader();
-        const urls = [
-            'https://threejs.org/examples/textures/cube/park2/px.jpg',
-            'https://threejs.org/examples/textures/cube/park2/nx.jpg',
-            'https://threejs.org/examples/textures/cube/park2/py.jpg',
-            'https://threejs.org/examples/textures/cube/park2/ny.jpg',
-            'https://threejs.org/examples/textures/cube/park2/pz.jpg',
-            'https://threejs.org/examples/textures/cube/park2/nz.jpg'
-        ];
-
-        this.envMap = await new Promise((resolve) => {
-            cubeTextureLoader.load(urls, (texture) => {
-                texture.encoding = THREE.sRGBEncoding;
-                resolve(texture);
-            });
-        });
-
-        this.scene.background = this.envMap;
-        this.scene.environment = this.envMap;
     }
 
     createFloor() {
-        // Создаем отражающий пол
-        const floorGeometry = new THREE.CircleGeometry(10, 64);
+        // Простой нейтральный пол
+        const floorGeometry = new THREE.CircleGeometry(1, 1);
         const floorMaterial = new THREE.MeshStandardMaterial({
-            color: 0x888888,
-            roughness: 0.1,
-            metalness: 0.9,
+            color: 0x444444,
+            roughness: 0.8,
+            metalness: 0.2,
             envMap: this.envMap,
-            envMapIntensity: 0.8
+            envMapIntensity: this.envMap ? 0.3 : 0
         });
 
         const floor = new THREE.Mesh(floorGeometry, floorMaterial);
         floor.rotation.x = -Math.PI / 2;
         floor.position.y = -0.5;
         floor.receiveShadow = true;
-        this.scene.add(floor);
-
-        // Добавляем второй слой пола для отражений
-        const reflectionGeometry = new THREE.CircleGeometry(12, 64);
-        const reflectionMaterial = new THREE.MeshBasicMaterial({
-            color: 0x222222,
-            transparent: true,
-            opacity: 0.3
-        });
-
-        const reflection = new THREE.Mesh(reflectionGeometry, reflectionMaterial);
-        reflection.rotation.x = -Math.PI / 2;
-        reflection.position.y = -0.49; // Чуть ниже основного пола
-        this.scene.add(reflection);
-    }
-
-    createDecorativeElements() {
-        // Создаем несколько отражающих сфер
-        const sphereGeometry = new THREE.SphereGeometry(0.4, 32, 32);
-        const torusGeometry = new THREE.TorusGeometry(0.6, 0.2, 16, 32);
-
-        const positions = [
-            { x: 3, y: 1, z: 2, type: 'sphere' },
-            { x: -2, y: 2, z: -3, type: 'torus' },
-            { x: 4, y: 0.8, z: -1, type: 'sphere' },
-            { x: -3, y: 1.5, z: 1, type: 'torus' }
-        ];
-
-        positions.forEach((pos, index) => {
-            let mesh;
-
-            if (pos.type === 'sphere') {
-                const material = new THREE.MeshStandardMaterial({
-                    color: 0xffffff,
-                    roughness: 0.05,
-                    metalness: 1.0,
-                    envMap: this.envMap,
-                    envMapIntensity: 1.2
-                });
-                mesh = new THREE.Mesh(sphereGeometry, material);
-            } else {
-                const material = new THREE.MeshStandardMaterial({
-                    color: 0xffffff,
-                    roughness: 0.1,
-                    metalness: 0.8,
-                    envMap: this.envMap,
-                    envMapIntensity: 1.0
-                });
-                mesh = new THREE.Mesh(torusGeometry, material);
-                mesh.rotation.x = Math.PI / 2;
-            }
-
-            mesh.position.set(pos.x, pos.y, pos.z);
-            mesh.castShadow = true;
-            this.scene.add(mesh);
-        });
+        //this.scene.add(floor);
     }
 
     createLights() {
-        // Основное направленное освещение
-        const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        // Основное студийное освещение
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
         mainLight.position.set(5, 8, 5);
         mainLight.castShadow = true;
         mainLight.shadow.mapSize.width = 1024;
@@ -204,17 +126,17 @@ class WebGLScene {
         this.scene.add(mainLight);
 
         // Заполняющий свет для мягких теней
-        const fillLight = new THREE.DirectionalLight(0x4477ff, 0.4);
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
         fillLight.position.set(-5, 3, -5);
         this.scene.add(fillLight);
 
-        // Теплый акцентный свет
-        const rimLight = new THREE.DirectionalLight(0xffaa66, 0.3);
-        rimLight.position.set(0, 5, -8);
+        // Контровой свет для отделения модели от фона
+        const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        rimLight.position.set(0, 2, -5);
         this.scene.add(rimLight);
 
-        // Небольшой ambient light для обшего освещения
-        const ambientLight = new THREE.AmbientLight(0x333333, 0.2);
+        // Легкий ambient light
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.1);
         this.scene.add(ambientLight);
     }
 
@@ -241,7 +163,7 @@ class WebGLScene {
 
         if (resetCameraBtn) {
             resetCameraBtn.addEventListener('click', () => {
-                this.camera.position.set(0, 2, 5);
+                this.camera.position.set(0, 1.5, 5);
                 this.camera.lookAt(0, 0, 0);
                 if (this.controls) {
                     this.controls.reset();
@@ -355,7 +277,7 @@ class WebGLScene {
         const size = box.getSize(new THREE.Vector3());
 
         const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = 3.0 / maxDim;
+        const scale = 2.5 / maxDim;
 
         model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
         model.scale.multiplyScalar(scale);
@@ -368,13 +290,13 @@ class WebGLScene {
 
                 if (child.material && this.envMap) {
                     child.material.envMap = this.envMap;
-                    child.material.envMapIntensity = 0.8;
+                    child.material.envMapIntensity = 0.5;
                     child.material.needsUpdate = true;
 
                     // Для PBR материалов настраиваем отражения
                     if (child.material.isMeshStandardMaterial) {
-                        child.material.roughness = 0.3;
-                        child.material.metalness = 0.7;
+                        child.material.roughness = 0.4;
+                        child.material.metalness = 0.6;
                     }
                 }
             }
@@ -384,11 +306,11 @@ class WebGLScene {
         this.scene.add(model);
 
         // Настраиваем камеру для лучшего обзора
-        this.camera.position.set(0, size.y * 1.5, size.z * 2);
-        this.camera.lookAt(0, 0, 0);
+        this.camera.position.set(0, size.y * 1.2, size.z * 2);
+        this.camera.lookAt(0, size.y * 0.2, 0);
 
         if (this.controls) {
-            this.controls.target.set(0, 0, 0);
+            this.controls.target.set(0, size.y * 0.2, 0);
         }
     }
 
@@ -413,15 +335,6 @@ class WebGLScene {
         if (this.rotationEnabled && this.loadedModel) {
             this.loadedModel.rotation.y += 0.01 * this.rotationSpeed;
         }
-
-        // Легкая анимация декоративных элементов
-        const time = Date.now() * 0.001;
-        this.scene.children.forEach((child, index) => {
-            if (child.isMesh && index > 3) { // Пропускаем пол и основные элементы
-                child.rotation.y = time * 0.2;
-                child.rotation.x = Math.sin(time * 0.3 + index) * 0.1;
-            }
-        });
 
         this.renderer.render(this.scene, this.camera);
         this.updateStats();
