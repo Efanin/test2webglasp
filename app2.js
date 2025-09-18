@@ -8,10 +8,9 @@ class WebGLScene {
         this.rotationEnabled = true;
         this.rotationSpeed = 1.0;
         this.loadedModel = null;
-        this.loader = null; // Будет инициализирован позже
-        this.objLoader = null; // Будет инициализирован позже
+        this.loader = null;
+        this.objLoader = null;
         this.controls = null;
-        this.envMap = null;
 
         this.init();
     }
@@ -19,7 +18,7 @@ class WebGLScene {
     async init() {
         try {
             this.initThreeJS();
-            await this.initLoaders(); // Инициализируем загрузчики
+            await this.initLoaders();
             await this.createEnvironment();
             this.createLights();
             this.setupControls();
@@ -42,7 +41,7 @@ class WebGLScene {
         if (typeof THREE.OBJLoader === 'undefined') {
             await this.loadScript('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/OBJLoader.js');
         }
-        
+
         this.loader = new THREE.GLTFLoader();
         this.objLoader = new THREE.OBJLoader();
     }
@@ -58,8 +57,9 @@ class WebGLScene {
     }
 
     initThreeJS() {
-        // Создаем сцену
+        // Создаем сцену с прозрачным фоном
         this.scene = new THREE.Scene();
+        this.scene.background = null; // Прозрачный фон
 
         // Создаем камеру
         this.camera = new THREE.PerspectiveCamera(
@@ -68,13 +68,13 @@ class WebGLScene {
             0.1,
             1000
         );
-        this.camera.position.set(0, 1.5, 5);
+        this.camera.position.set(0, 5.5, 15);
 
-        // Создаем рендерер
+        // Создаем рендерер с прозрачностью
         this.renderer = new THREE.WebGLRenderer({
             canvas: this.canvas,
             antialias: true,
-            alpha: true
+            alpha: true // Включаем прозрачность
         });
         this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight);
         this.renderer.setPixelRatio(window.devicePixelRatio);
@@ -82,53 +82,29 @@ class WebGLScene {
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 1;
+
+        // Устанавливаем прозрачный цвет очистки
+        this.renderer.setClearColor(0x000000, 0); // Полностью прозрачный
     }
 
     async createEnvironment() {
-        // Используем рабочий cubemap из three.js examples
-        try {
-            const cubeTextureLoader = new THREE.CubeTextureLoader();
-            
-            // Используем проверенный cubemap (Pisa)
-            const urls = [
-                'https://threejs.org/examples/textures/cube/pisa/px.png',
-                'https://threejs.org/examples/textures/cube/pisa/nx.png',
-                'https://threejs.org/examples/textures/cube/pisa/py.png',
-                'https://threejs.org/examples/textures/cube/pisa/ny.png',
-                'https://threejs.org/examples/textures/cube/pisa/pz.png',
-                'https://threejs.org/examples/textures/cube/pisa/nz.png'
-            ];
+        // Минималистичная сцена с прозрачным фоном
+        this.scene.background = null;
+        this.scene.environment = null;
 
-            this.envMap = await new Promise((resolve, reject) => {
-                cubeTextureLoader.load(urls, (texture) => {
-                    texture.encoding = THREE.sRGBEncoding;
-                    resolve(texture);
-                }, undefined, reject);
-            });
-
-            this.scene.background = this.envMap;
-            this.scene.environment = this.envMap;
-
-        } catch (error) {
-            console.warn('Cubemap loading failed, using fallback:', error);
-            // Fallback к простому цвету
-            this.scene.background = new THREE.Color(0x222222);
-            this.scene.environment = null;
-        }
-
-        // Создаем минималистичный пол
+        // Создаем легкий пол с прозрачностью
         this.createFloor();
     }
 
     createFloor() {
-        // Простой нейтральный пол
+        // Пол с полупрозрачностью
         const floorGeometry = new THREE.CircleGeometry(8, 32);
         const floorMaterial = new THREE.MeshStandardMaterial({
-            color: 0x444444,
+            color: 0x888888,
             roughness: 0.8,
             metalness: 0.2,
-            envMap: this.envMap,
-            envMapIntensity: this.envMap ? 0.3 : 0
+            transparent: true,
+            opacity: 0.3 // Полупрозрачный пол
         });
 
         const floor = new THREE.Mesh(floorGeometry, floorMaterial);
@@ -136,11 +112,18 @@ class WebGLScene {
         floor.position.y = -0.5;
         floor.receiveShadow = true;
         this.scene.add(floor);
+
+        // Добавляем легкую сетку для лучшего восприятия пространства
+        const gridHelper = new THREE.GridHelper(10, 10, 0x888888, 0x444444);
+        gridHelper.material.transparent = true;
+        gridHelper.material.opacity = 0.2;
+        gridHelper.position.y = -0.49; // Чуть выше пола
+        this.scene.add(gridHelper);
     }
 
     createLights() {
-        // Основное студийное освещение
-        const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        // Мягкое освещение, которое хорошо смотрится на прозрачном фоне
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
         mainLight.position.set(5, 8, 5);
         mainLight.castShadow = true;
         mainLight.shadow.mapSize.width = 1024;
@@ -149,17 +132,17 @@ class WebGLScene {
         mainLight.shadow.camera.far = 20;
         this.scene.add(mainLight);
 
-        // Заполняющий свет для мягких теней
-        const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        // Заполняющий свет
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
         fillLight.position.set(-5, 3, -5);
         this.scene.add(fillLight);
 
-        // Контровой свет для отделения модели от фона
-        const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        // Контровой свет
+        const rimLight = new THREE.DirectionalLight(0xffffff, 0.2);
         rimLight.position.set(0, 2, -5);
         this.scene.add(rimLight);
 
-        // Легкий ambient light
+        // Ambient light
         const ambientLight = new THREE.AmbientLight(0x404040, 0.1);
         this.scene.add(ambientLight);
     }
@@ -180,8 +163,8 @@ class WebGLScene {
         if (toggleRotationBtn) {
             toggleRotationBtn.addEventListener('click', () => {
                 this.rotationEnabled = !this.rotationEnabled;
-                toggleRotationBtn.textContent = this.rotationEnabled ? 
-                    'Stop Rotation' : 'Start Rotation';
+                toggleRotationBtn.textContent = this.rotationEnabled ?
+                    'Остановить вращение' : 'Запустить вращение';
             });
         }
 
@@ -201,12 +184,7 @@ class WebGLScene {
             });
         }
 
-        // Обработка изменения размера окна
-        window.addEventListener('resize', () => {
-            this.onWindowResize();
-        });
-
-        // Добавляем OrbitControls для интерактивного управления камерой
+        // OrbitControls для управления камерой
         if (typeof THREE.OrbitControls !== 'undefined') {
             this.controls = new THREE.OrbitControls(this.camera, this.canvas);
             this.controls.enableDamping = true;
@@ -216,6 +194,10 @@ class WebGLScene {
             this.controls.maxDistance = 20;
             this.controls.maxPolarAngle = Math.PI / 2;
         }
+
+        window.addEventListener('resize', () => {
+            this.onWindowResize();
+        });
     }
 
     openModelLoader() {
@@ -232,46 +214,36 @@ class WebGLScene {
     }
 
     loadModel(file) {
-        const fileName = file.name.toLowerCase();
         const reader = new FileReader();
-
         reader.onload = (e) => {
-            const arrayBuffer = e.target.result;
-            document.getElementById('loading').style.display = 'block';
-
-            try {
-                if (fileName.endsWith('.gltf') || fileName.endsWith('.glb')) {
-                    this.loadGLTFModel(arrayBuffer, fileName.endsWith('.glb'));
-                } else if (fileName.endsWith('.obj')) {
-                    this.loadOBJModel(arrayBuffer);
-                } else {
-                    throw new Error('Unsupported file format');
-                }
-            } catch (error) {
-                console.error('Error loading model:', error);
-                this.showError('Failed to load model: ' + error.message);
-                document.getElementById('loading').style.display = 'none';
-            }
+            document.getElementById('loading').style.display = 'flex';
+            this.processModelFile(e.target.result, file.name);
         };
-
-        reader.onerror = (error) => {
-            console.error('File reading error:', error);
-            this.showError('Failed to read file');
-            document.getElementById('loading').style.display = 'none';
-        };
-
         reader.readAsArrayBuffer(file);
+    }
+
+    processModelFile(arrayBuffer, fileName) {
+        try {
+            if (fileName.toLowerCase().endsWith('.gltf') || fileName.toLowerCase().endsWith('.glb')) {
+                this.loadGLTFModel(arrayBuffer, fileName.toLowerCase().endsWith('.glb'));
+            } else if (fileName.toLowerCase().endsWith('.obj')) {
+                this.loadOBJModel(arrayBuffer);
+            } else {
+                throw new Error('Неподдерживаемый формат файла');
+            }
+        } catch (error) {
+            this.showError('Ошибка загрузки: ' + error.message);
+            document.getElementById('loading').style.display = 'none';
+        }
     }
 
     loadGLTFModel(arrayBuffer, isBinary) {
         const loader = isBinary ? this.loader : new THREE.GLTFLoader();
-
         loader.parse(arrayBuffer, '', (gltf) => {
             this.addModelToScene(gltf.scene);
             document.getElementById('loading').style.display = 'none';
         }, (error) => {
-            console.error('GLTF parsing error:', error);
-            this.showError('Failed to parse GLTF model');
+            this.showError('Ошибка загрузки GLTF: ' + error.message);
             document.getElementById('loading').style.display = 'none';
         });
     }
@@ -284,13 +256,13 @@ class WebGLScene {
             this.addModelToScene(model);
             document.getElementById('loading').style.display = 'none';
         } catch (error) {
-            console.error('OBJ parsing error:', error);
-            this.showError('Failed to parse OBJ model');
+            this.showError('Ошибка загрузки OBJ: ' + error.message);
             document.getElementById('loading').style.display = 'none';
         }
     }
 
     addModelToScene(model) {
+        // Удаляем предыдущую модель
         if (this.loadedModel) {
             this.scene.remove(this.loadedModel);
         }
@@ -301,27 +273,22 @@ class WebGLScene {
         const size = box.getSize(new THREE.Vector3());
 
         const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = 2.5 / maxDim;
+        const scale = 5 / maxDim;
 
         model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
         model.scale.multiplyScalar(scale);
 
-        // Применяем окружение к материалам модели
+        // Настраиваем материалы для прозрачного фона
         model.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
-                
-                if (child.material && this.envMap) {
-                    child.material.envMap = this.envMap;
-                    child.material.envMapIntensity = 0.5;
+
+                // Улучшаем материалы для прозрачного фона
+                if (child.material) {
+                    child.material.transparent = false;
+                    child.material.depthWrite = true;
                     child.material.needsUpdate = true;
-                    
-                    // Для PBR материалов настраиваем отражения
-                    if (child.material.isMeshStandardMaterial) {
-                        child.material.roughness = 0.4;
-                        child.material.metalness = 0.6;
-                    }
                 }
             }
         });
@@ -329,12 +296,12 @@ class WebGLScene {
         this.loadedModel = model;
         this.scene.add(model);
 
-        // Настраиваем камеру для лучшего обзора
-        this.camera.position.set(0, size.y * 1.2, size.z * 2);
-        this.camera.lookAt(0, size.y * 0.2, 0);
-        
+        // Настраиваем камеру
+        this.camera.position.set(0, size.y * 1.5, size.z * 2);
+        this.camera.lookAt(0, size.y * 0.5, 0);
+
         if (this.controls) {
-            this.controls.target.set(0, size.y * 0.2, 0);
+            this.controls.target.set(0, size.y * 0.5, 0);
         }
     }
 
@@ -350,12 +317,10 @@ class WebGLScene {
     animate() {
         requestAnimationFrame(() => this.animate());
 
-        // Обновляем controls если они есть
         if (this.controls) {
             this.controls.update();
         }
 
-        // Вращение загруженной модели
         if (this.rotationEnabled && this.loadedModel) {
             this.loadedModel.rotation.y += 0.01 * this.rotationSpeed;
         }
@@ -374,26 +339,23 @@ class WebGLScene {
     showError(message) {
         const errorDiv = document.createElement('div');
         errorDiv.style.cssText = `
-            position: absolute;
-            top: 50%;
+            position: fixed;
+            top: 20px;
             left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 0, 0, 0.8);
+            transform: translateX(-50%);
+            background: rgba(255, 0, 0, 0.9);
             color: white;
-            padding: 20px;
+            padding: 15px 20px;
             border-radius: 5px;
-            text-align: center;
             z-index: 1000;
             font-family: Arial, sans-serif;
+            max-width: 80%;
+            text-align: center;
         `;
         errorDiv.textContent = message;
         document.body.appendChild(errorDiv);
 
-        setTimeout(() => {
-            if (errorDiv.parentNode) {
-                errorDiv.parentNode.removeChild(errorDiv);
-            }
-        }, 5000);
+        setTimeout(() => errorDiv.remove(), 5000);
     }
 }
 
